@@ -1,4 +1,4 @@
-import { api, ws, image } from '@appdeploy/client';
+import { api, ws, image } from './src/appdeploy-client';
 
 /* PassFlow keeps a local cache, with AppDeploy database as the shared source of truth. */
 const $ = (s, root = document) => root.querySelector(s);
@@ -13,6 +13,7 @@ let currentView = 'dashboard',
   scanStream,
   scanLoop,
   allocationStudentId = '',
+  studentSearchQuery = '',
   bulkSelectedStudentIds = new Set(),
   remoteReady = false,
   syncQueue = Promise.resolve(),
@@ -39,7 +40,10 @@ const save = () => {
   localStorage.setItem(storeKey, JSON.stringify(state));
   localStorage.setItem('passflow-last-local-backup-v1', JSON.stringify(state));
   if (!remoteReady) return;
-  syncQueue = syncQueue.then(() => api.put('/api/state', { state })).catch(error => console.warn('Shared state sync failed:', error));
+  syncQueue = syncQueue.then(() => api.put('/api/state', { state })).catch(error => {
+    console.warn('Shared state sync failed:', error);
+    toast('Shared data sync failed. Check the deployment settings and try again.');
+  });
 };
 async function bootstrapSharedState() {
   const localSnapshot = JSON.parse(localStorage.getItem(storeKey) || 'null');
@@ -59,6 +63,9 @@ async function bootstrapSharedState() {
     }
   } catch (error) {
     console.warn('Shared state is temporarily unavailable; using local cache.', error);
+    if (import.meta.env.PROD) {
+      toast('Shared data is unavailable. Check the deployment settings; changes may not sync.');
+    }
   }
   remoteReady = true;
   connectRealtime();
@@ -91,7 +98,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('focus', refreshSharedState);
 function connectRealtime() {
-  if (realtimeConnection) return;
+  if (realtimeConnection || import.meta.env.PROD) return;
   try {
     realtimeConnection = ws.connect();
     realtimeConnection.onMessage(message => {
@@ -277,6 +284,13 @@ function render() {
     reports,
   }[currentView]();
   labelMobileTableCells();
+  if (currentView === 'students') applyStudentSearch();
+}
+function applyStudentSearch() {
+  const query = studentSearchQuery.trim().toLocaleLowerCase();
+  $$('#studentRows tr').forEach(row => {
+    row.hidden = !row.textContent.toLocaleLowerCase().includes(query);
+  });
 }
 function labelMobileTableCells() {
   $$('.table-wrap table').forEach(table => {
@@ -346,7 +360,7 @@ function students() {
       return `<tr><td><b>${esc(s.name)}</b><br><small>${esc(s.mobile)}</small></td><td><b>${issued}</b> Issued · <b>${hand}</b> Handed over · <b>${pending}</b> Pending</td><td>${money(paid)}</td><td><button class="table-action" data-issue-student="${s.id}">Issue pass</button><button class="table-action" data-whatsapp="${s.id}">WhatsApp PDF</button><button class="table-action" data-student-history="${s.id}">History</button><button class="table-action" data-edit-student="${s.id}">Edit</button><button class="table-action delete" data-delete-student="${s.id}">Delete</button></td></tr>`;
     })
     .join('');
-  return `<div class="section-title"><h2>Students</h2><div class="toolbar"><input id="studentSearch" class="search" placeholder="Search name or mobile"><button class="primary" data-open="studentModal">+ Add student</button></div></div><div class="card table-wrap"><table><thead><tr><th>Student</th><th>Pass status</th><th>Collection received</th><th></th></tr></thead><tbody id="studentRows">${rows || '<tr><td colspan="5" class="empty">No students registered.</td></tr>'}</tbody></table></div>`;
+  return `<div class="section-title"><h2>Students</h2><div class="toolbar"><input id="studentSearch" class="search" placeholder="Search name or mobile" value="${esc(studentSearchQuery)}"><button class="primary" data-open="studentModal">+ Add student</button></div></div><div class="card table-wrap"><table><thead><tr><th>Student</th><th>Pass status</th><th>Collection received</th><th></th></tr></thead><tbody id="studentRows">${rows || '<tr><td colspan="5" class="empty">No students registered.</td></tr>'}</tbody></table></div>`;
 }
 function allocations() {
   const rows = state.allocations
@@ -710,8 +724,12 @@ function selectedEventQuantities(containerSelector, checkboxName, quantityName, 
   });
 }
 function waUrl(s, text = '') {
-  const number = String(s.mobile || '').replace(/\D/g, '');
-  return `https://wa.me/${number.length === 10 ? '91' + number : number}?text=${encodeURIComponent(text)}`;
+  const number = whatsappNumber(s);
+  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
+}
+function whatsappNumber(s) {
+  const number = String(s?.mobile || '').replace(/\D/g, '');
+  return number.length === 10 ? `91${number}` : number;
 }
 function cellText(value) {
   return String(value ?? '').trim();
@@ -910,7 +928,48 @@ async function importStudentScreenshots(files) {
     renderStudentOcrPreview();
   } catch (error) {
     console.error(error);
-    toast('Could not read the screenshot. Please try a clearer image.');
+    toast(error instanceof Error ? `Could not read screenshot: ${error.message}` : 'Could not read the screenshot. Please try again.');
+  }
+}
+
+function exportBackup() {
+  const filename = `rangrasiya-backup-${today}.json`;
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }),
+  );
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  toast(`Backup downloaded: ${filename}`);
+}
+
+async function importBackup(file) {
+  if (file.size > 10_000_000) {
+    toast('Backup file is too large.');
+    return;
+  }
+  try {
+    const imported = JSON.parse(await file.text());
+    const collections = ['events', 'students', 'allocations', 'payments', 'expenses'];
+    if (
+      !imported ||
+      typeof imported !== 'object' ||
+      collections.some(collection => !Array.isArray(imported[collection]))
+    ) {
+      throw new Error('This file is not a valid Rangrasiya backup.');
+    }
+    if (!confirm('Replace all current data on this device and in shared storage with this backup?')) {
+      return;
+    }
+    state = imported;
+    dedupeNavratriEvents();
+    save();
+    render();
+    toast('Backup restored to this device and shared storage.');
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Could not restore this backup.');
   }
 }
 
@@ -1128,7 +1187,7 @@ async function qrImageForAllocation(allocation) {
   if (!image) throw new Error('QR image could not be created');
   return image;
 }
-async function generatePdf(ids, share = false) {
+async function generatePdf(ids, share = false, whatsappWindow = null) {
   if (!window.jspdf || !window.QRCode) {
     toast('QR/PDF library is still loading. Please retry.');
     return;
@@ -1186,40 +1245,26 @@ async function generatePdf(ids, share = false) {
   const studentFileName = (studentOf(allocations[0].student)?.name || 'Student')
     .trim()
     .replace(/[\\/:*?"<>|]+/g, '-')
-    .replace(/\s+/g, ' ');
+    .replace(/\s+/g, ' ') || 'Student';
   const filename = `${studentFileName}.pdf`;
   const blob = doc.output('blob');
-  const file = new File([blob], filename, { type: 'application/pdf' });
   if (share) {
     const student = studentOf(allocations[0].student);
     if (await sendQrPdfToStudent(student, blob, filename)) {
+      if (whatsappWindow && !whatsappWindow.closed) {
+        whatsappWindow.location.href = waUrl(student);
+      }
       toast(`QR PDF sent directly to ${student.mobile} on WhatsApp.`);
       return;
     }
   }
-  if (share && navigator.share && navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({
-        title: 'Your event QR passes',
-        text: 'Your date-wise QR passes are attached.',
-        files: [file],
-      });
-      toast('Choose WhatsApp in the share sheet to send the attached QR PDF.');
-      return;
-    } catch (e) {
-      if (e.name === 'AbortError') return;
-    }
-  }
   doc.save(filename);
   if (share) {
-    let s = studentOf(allocations[0].student);
-    window.location.assign(
-      waUrl(
-        s,
-        'Your Rangrasiya Raas Garba QR PDF was downloaded by this device. Please attach the downloaded PDF in this chat.'
-      )
-    );
-    toast('PDF downloaded. WhatsApp is opening for this student.');
+    const student = studentOf(allocations[0].student);
+    const chatUrl = waUrl(student);
+    if (whatsappWindow && !whatsappWindow.closed) whatsappWindow.location.href = chatUrl;
+    else window.location.assign(chatUrl);
+    toast(`PDF downloaded as ${filename}. WhatsApp is opening the chat for ${student?.name || 'this student'}; attach the PDF there.`);
   } else toast('QR PDF downloaded.');
 }
 async function sendQrPdfToStudent(student, blob, filename) {
@@ -1229,7 +1274,7 @@ async function sendQrPdfToStudent(student, blob, filename) {
     const chunk = 0x8000;
     for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
     const pdfBase64 = btoa(binary);
-    const response = await api.post('/api/whatsapp/send-pdf', { mobile: String(student?.mobile || ''), filename, caption: 'Your Rangrasiya Raas Garba QR passes are attached.', pdfBase64 });
+    const response = await api.post('/api/whatsapp/send-pdf', { mobile: whatsappNumber(student), filename, caption: 'Your Rangrasiya Raas Garba QR passes are attached.', pdfBase64 });
     return response.data?.sent === true;
   } catch (error) {
     console.warn('WhatsApp Business API delivery unavailable:', error);
@@ -1473,17 +1518,29 @@ document.addEventListener('click', e => {
   if (b.dataset.payment) paymentModal(b.dataset.payment);
   if (b.dataset.pdf) generatePdf([b.dataset.pdf], true);
   if (b.dataset.whatsapp) {
+    const student = studentOf(b.dataset.whatsapp);
+    const mobile = whatsappNumber(student);
+    if (mobile.length < 8 || mobile.length > 15) {
+      toast('Add a valid mobile number to this student before sharing a QR PDF.');
+      return;
+    }
     let ids = state.allocations
       .filter(a => a.student === b.dataset.whatsapp && a.issued)
       .map(a => a.id);
     if (!ids.length) toast('Issue at least one pass before sharing a QR PDF.');
-    else generatePdf(ids, true);
+    else {
+      const whatsappWindow = window.open(waUrl(student), '_blank');
+      if (whatsappWindow) whatsappWindow.opener = null;
+      generatePdf(ids, true, whatsappWindow);
+    }
   }
   if (b.dataset.studentHistory) studentHistory(b.dataset.studentHistory);
   if (b.dataset.action === 'scan') startScanner();
   if (b.dataset.action === 'bulk-allocate') { prepareBulkAllocation(); openModal('bulkAllocationModal'); }
   if (b.id === 'bulkDeselectAll') { bulkSelectedStudentIds = new Set(); renderBulkStudents(); }
   if (b.dataset.action === 'bulk-import') $('#bulkFile').click();
+  if (b.dataset.action === 'export-backup') exportBackup();
+  if (b.dataset.action === 'import-backup') $('#backupFile').click();
   if (b.dataset.action === 'student-import') openModal('studentImportModal');
   if (b.dataset.action === 'student-import-excel') $('#studentFile').click();
   if (b.dataset.action === 'student-import-screenshot') $('#studentScreenshotFile').click();
@@ -1884,10 +1941,8 @@ $('#allocationForm').addEventListener('submit', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'studentSearch') {
-    let q = e.target.value.toLowerCase();
-    $$('#studentRows tr').forEach(
-      r => (r.hidden = !r.textContent.toLowerCase().includes(q))
-    );
+    studentSearchQuery = e.target.value;
+    applyStudentSearch();
   }
 });
 document.addEventListener('change', e => {
@@ -1947,6 +2002,11 @@ $('#studentFile').addEventListener('change', e => {
 $('#studentScreenshotFile').addEventListener('change', e => {
   const files = e.target.files;
   if (files?.length) importStudentScreenshots(files);
+  e.target.value = '';
+});
+$('#backupFile').addEventListener('change', e => {
+  const file = e.target.files?.[0];
+  if (file) importBackup(file);
   e.target.value = '';
 });
 document.addEventListener('input', e => {

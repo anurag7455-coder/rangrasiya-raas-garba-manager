@@ -34,7 +34,7 @@
     <div class="side-bottom"><span class="pulse"></span> Event control centre</div>
   </aside>
   <main>
-    <header><div><p class="eyebrow" id="pageKicker">OVERVIEW</p><h1 id="pageTitle">Welcome, admin.</h1></div><div class="header-actions"><button class="icon-button" id="seedBtn" title="Load sample data">✦</button><button class="ghost bulk-button" data-action="bulk-import">Bulk import</button><button class="ghost bulk-button" data-action="student-import">Import Students</button></div></header>
+    <header><div><p class="eyebrow" id="pageKicker">OVERVIEW</p><h1 id="pageTitle">Welcome, admin.</h1></div><div class="header-actions"><button class="icon-button" id="seedBtn" title="Load sample data">✦</button><button class="ghost bulk-button" data-action="export-backup">Export backup</button><button class="ghost bulk-button" data-action="import-backup">Import backup</button><button class="ghost bulk-button" data-action="bulk-import">Bulk import</button><button class="ghost bulk-button" data-action="student-import">Import Students</button></div></header>
     <div id="app"></div>
   </main>
 
@@ -51,5 +51,6 @@
   <input id="bulkFile" type="file" accept=".xlsx,.xls" hidden>
   <input id="studentFile" type="file" accept=".xlsx,.xls" hidden>
   <input id="studentScreenshotFile" type="file" accept="image/*" multiple hidden>
+  <input id="backupFile" type="file" accept=".json,application/json" hidden>
   <div id="toast"></div><script type="module" src="./src/main.ts"></script>
 </body></html>

@@ -1,0 +1,248 @@
+[
+  {
+    "name": "Preserve student profile and issue passes later",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": [
+      "student profile creation",
+      "deferred pass issuance",
+      "QR PDF generation"
+    ],
+    "description": "Verifies the existing profile-first workflow still saves a student without passes and later issues event passes.",
+    "steps": [
+      "Add two events",
+      "Save a student profile without issuing passes",
+      "Edit the student, select events, enter payment, and issue passes"
+    ],
+    "expected": "The student remains saved, allocations are created only when issuance is selected, and the QR PDF bundle is generated."
+  },
+  {
+    "name": "Bulk allocate complimentary passes within event quota",
+    "viewport": "desktop",
+    "covers": [
+      "bulk pass allocation by event/day",
+      "student name search and multi-select",
+      "select all and deselect all",
+      "per-student quantity calculation",
+      "duplicate allocation protection",
+      "complimentary quota enforcement",
+      "inventory calculation"
+    ],
+    "description": "Verifies multiple students can receive passes at once and complimentary allocations consume the event-specific free-pass quota.",
+    "steps": [
+      "Create an event with 10 received passes and 3 complimentary passes allowed",
+      "Open Bulk Allocate Passes, select the event/day, search a student by name, select three students, and verify the selected count and total passes",
+      "Use Select All or Deselect All as needed, set Passes per student to 1, enable Complimentary, and allocate the selected students"
+    ],
+    "expected": "The bulk screen calculates selected students × quantity, already-allocated students are disabled for that event, and the three selected students receive three passes without exceeding inventory or complimentary quota."
+  },
+  {
+    "name": "Shared data persists across app contexts",
+    "viewport": "mobile",
+    "covers": [
+      "cloud persistence",
+      "cross-client state synchronization",
+      "refresh persistence"
+    ],
+    "description": "Verifies the app loads shared records from the backend instead of relying only on one browser storage container.",
+    "steps": [
+      "Create a student and event",
+      "Refresh the live app",
+      "Open the same app from its installed home-screen web-app context"
+    ],
+    "expected": "The same student and event records are available in every app context because they are stored in the shared backend."
+  },
+  {
+    "name": "Record payment and keep complimentary value separate",
+    "viewport": "desktop",
+    "covers": [
+      "payment collection",
+      "complimentary exclusion from sales value",
+      "payment history"
+    ],
+    "description": "Verifies paid allocations record collection while complimentary allocations remain zero-value and separately counted.",
+    "steps": [
+      "Issue one paid pass and record a partial payment",
+      "Issue one complimentary pass from an event with a complimentary quota",
+      "Open Payments and Reports"
+    ],
+    "expected": "The paid allocation shows collection and pending balance; the complimentary allocation shows zero sales value and is separately identified."
+  },
+  {
+    "name": "Delete a pass allocation with confirmation",
+    "viewport": "mobile",
+    "covers": [
+      "pass allocation deletion",
+      "destructive-action confirmation",
+      "linked payment cleanup"
+    ],
+    "description": "Verifies existing deletion behavior remains intact after the shared-state and allocation changes.",
+    "steps": [
+      "Create an issued pass with a linked payment",
+      "Delete the allocation and cancel once",
+      "Delete it again and confirm"
+    ],
+    "expected": "Cancel preserves the pass; confirmation removes the allocation and its linked payment while the student and event remain."
+  },
+  {
+    "name": "Import student profiles from Excel",
+    "viewport": "desktop",
+    "covers": [
+      "student-only Excel import",
+      "student profile creation from name and mobile",
+      "duplicate mobile protection",
+      "no pass or payment creation during student import"
+    ],
+    "description": "Verifies the dedicated student importer creates profiles from Student Name and Mobile Number without creating allocations or payments.",
+    "steps": [
+      "Open Import Students and upload an Excel file containing Student Name and Mobile Number",
+      "Upload the same file again",
+      "Open Students and review the imported profiles"
+    ],
+    "expected": "Each valid mobile number creates one student profile; duplicate mobile numbers are skipped and no passes or payments are created by the import."
+  },
+  {
+    "name": "Cloud state is authoritative across browser contexts",
+    "viewport": "mobile",
+    "covers": [
+      "cloud source of truth",
+      "stale local cache protection",
+      "cross-context refresh"
+    ],
+    "description": "Verifies a deleted student does not return from an older Home Screen or browser local cache after shared cloud state refresh.",
+    "steps": [
+      "Create a student and allocation",
+      "Delete the student from one app context",
+      "Open or refresh another existing app context with an older local cache",
+      "Wait for realtime or shared refresh"
+    ],
+    "expected": "The second context reflects the cloud state and does not resurrect the deleted student, allocation, or linked payment."
+  },
+  {
+    "name": "Delete student and cascade linked passes and payments",
+    "viewport": "desktop",
+    "covers": [
+      "student deletion",
+      "allocation cascade deletion",
+      "payment cascade deletion",
+      "event inventory restoration"
+    ],
+    "description": "Verifies deleting a student removes the student, all linked pass allocations, and all linked payments while preserving unrelated students and events.",
+    "steps": [
+      "Create a student with allocated passes and at least one linked payment",
+      "Delete the student and confirm the destructive action",
+      "Open Students, Pass Allocations, Payments, and event inventory"
+    ],
+    "expected": "The student, their allocations, and linked payments are gone; unrelated records remain and the deleted pass quantities are available again in the relevant event inventory."
+  },
+  {
+    "name": "Keep Navratri Day 1 to Day 9 unique after cloud sync",
+    "viewport": "mobile",
+    "covers": [
+      "Navratri event deduplication",
+      "cloud state cleanup",
+      "event allocation remapping"
+    ],
+    "description": "Verifies duplicate cloud/local copies of Day 1 to Day 9 collapse into one event per day without losing allocations.",
+    "steps": [
+      "Open the app after shared data sync",
+      "Open Events",
+      "Open Passes and review any existing allocations"
+    ],
+    "expected": "Each Navratri day from Day 1 through Day 9 appears only once, and existing allocations remain attached to the retained event."
+  },
+  {
+    "name": "Review screenshot student import with name plus mobile duplicate protection",
+    "viewport": "mobile",
+    "covers": [
+      "student screenshot OCR import",
+      "screenshot review before save",
+      "name plus mobile duplicate protection",
+      "different names with same mobile remain separate",
+      "student-only import without passes or payments",
+      "POST /api/ocr/students"
+    ],
+    "description": "Verifies screenshot student import opens a review screen, applies the name-plus-mobile duplicate rule, and only saves confirmed student profiles.",
+    "steps": [
+      "Open Import Students",
+      "Choose Upload Screenshot and select a clear screenshot containing student names and mobile numbers",
+      "Review the extracted rows and confirm the duplicate statuses",
+      "Add the selected students",
+      "Open Students and verify the added profiles"
+    ],
+    "expected": "The screenshot is parsed into editable student rows; exact same name plus mobile duplicates are not selected, different names sharing one mobile can both be added, and no passes or payments are created."
+  },
+  {
+    "name": "Show student and pass counts on the home dashboard",
+    "viewport": "desktop",
+    "covers": [
+      "dashboard student count",
+      "dashboard pass inventory summary",
+      "dashboard collection and expense summary"
+    ],
+    "description": "Verifies the home dashboard shows the current student count alongside event, pass, collection, pending, and expense totals.",
+    "steps": [
+      "Create two student profiles and an event with 10 received passes",
+      "Issue three passes and record a payment",
+      "Open the Home dashboard"
+    ],
+    "expected": "The dashboard shows 2 total students, 10 passes received, 3 passes issued, 7 passes remaining, and current collection, pending collection, and expense totals."
+  },
+  {
+    "name": "Save and edit different pass quantities per day",
+    "viewport": "mobile",
+    "covers": [
+      "student save with common quantity greater than one",
+      "select all nine days",
+      "per-day quantity override",
+      "edit existing day quantity",
+      "payment due recalculation",
+      "single-scan handover of the allocated quantity",
+      "QR PDF updated quantity"
+    ],
+    "description": "Verifies a student can receive a common quantity for selected days, override one day, then edit an existing day's quantity without duplicating the allocation.",
+    "steps": [
+      "Add a student and select issue passes now",
+      "Set common quantity to 2 and select all nine event days; verify every selected day's quantity field visibly becomes 2",
+      "Verify the total value equals the sum of each selected day's event price multiplied by its quantity",
+      "Override Day 5 quantity to 5 and save the student",
+      "Edit the student and increase Day 5 quantity from 5 to 6",
+      "Open the QR PDF and scan the Day 5 QR once"
+    ],
+    "expected": "The student and allocations save; selected days visibly inherit the common quantity, prices and total recalculate using each day's own price, a per-day override is preserved, Day 5 shows 6 passes after edit, the amount due increases by the added pass value, the PDF shows the updated quantity, and one successful scan records all 6 passes for that day."
+  },
+  {
+    "name": "Reject QR passes scanned on the wrong calendar date",
+    "viewport": "mobile",
+    "covers": [
+      "calendar-date QR validation",
+      "wrong-day rejection",
+      "fake-entry protection"
+    ],
+    "description": "Verifies a valid issued QR cannot be used before or after the event's configured calendar date.",
+    "steps": [
+      "Create an issued pass for an event dated tomorrow",
+      "Open Scan and scan that event's QR today",
+      "Review the scan result"
+    ],
+    "expected": "The scanner shows INVALID — WRONG DATE and does not record handover."
+  },
+  {
+    "name": "Save payment generates QR without opening WhatsApp",
+    "viewport": "desktop",
+    "covers": [
+      "payment received collection",
+      "automatic QR PDF generation",
+      "WhatsApp manual action separation",
+      "no pending amount display"
+    ],
+    "description": "Verifies pass issuance creates the PDF while WhatsApp delivery remains a separate explicit action.",
+    "steps": [
+      "Add a student and issue a pass with payment received",
+      "Save the payment and issue the pass",
+      "Review the Students page and dashboard",
+      "Choose WhatsApp PDF only when ready to message the student"
+    ],
+    "expected": "The pass PDF is generated after saving; the app does not automatically open WhatsApp, no pending amount is displayed, and the separate WhatsApp PDF action opens the student's chat or sends through configured WhatsApp Business delivery."
+  }
+]
