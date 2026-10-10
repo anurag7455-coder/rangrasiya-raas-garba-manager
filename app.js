@@ -1187,7 +1187,7 @@ async function qrImageForAllocation(allocation) {
   if (!image) throw new Error('QR image could not be created');
   return image;
 }
-async function generatePdf(ids, share = false, whatsappWindow = null) {
+async function generatePdf(ids, share = false) {
   if (!window.jspdf || !window.QRCode) {
     toast('QR/PDF library is still loading. Please retry.');
     return;
@@ -1247,39 +1247,14 @@ async function generatePdf(ids, share = false, whatsappWindow = null) {
     .replace(/[\\/:*?"<>|]+/g, '-')
     .replace(/\s+/g, ' ') || 'Student';
   const filename = `${studentFileName}.pdf`;
-  const blob = doc.output('blob');
-  if (share) {
-    const student = studentOf(allocations[0].student);
-    if (await sendQrPdfToStudent(student, blob, filename)) {
-      if (whatsappWindow && !whatsappWindow.closed) {
-        whatsappWindow.location.href = waUrl(student);
-      }
-      toast(`QR PDF sent directly to ${student.mobile} on WhatsApp.`);
-      return;
-    }
-  }
   doc.save(filename);
   if (share) {
     const student = studentOf(allocations[0].student);
-    const chatUrl = waUrl(student);
-    if (whatsappWindow && !whatsappWindow.closed) whatsappWindow.location.href = chatUrl;
-    else window.location.assign(chatUrl);
-    toast(`PDF downloaded as ${filename}. WhatsApp is opening the chat for ${student?.name || 'this student'}; attach the PDF there.`);
+    const message = `Hi ${student?.name || ''}, your Rangrasiya Raas Garba QR passes are ready. I will attach the PDF here.`;
+    $('#whatsappShareLink').href = waUrl(student, message);
+    openModal('whatsappShareModal');
+    toast(`PDF download started: ${filename}. Open WhatsApp after it finishes.`);
   } else toast('QR PDF downloaded.');
-}
-async function sendQrPdfToStudent(student, blob, filename) {
-  try {
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let binary = '';
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    const pdfBase64 = btoa(binary);
-    const response = await api.post('/api/whatsapp/send-pdf', { mobile: whatsappNumber(student), filename, caption: 'Your Rangrasiya Raas Garba QR passes are attached.', pdfBase64 });
-    return response.data?.sent === true;
-  } catch (error) {
-    console.warn('WhatsApp Business API delivery unavailable:', error);
-    return false;
-  }
 }
 function issue(a) {
   a.issued = true;
@@ -1528,11 +1503,7 @@ document.addEventListener('click', e => {
       .filter(a => a.student === b.dataset.whatsapp && a.issued)
       .map(a => a.id);
     if (!ids.length) toast('Issue at least one pass before sharing a QR PDF.');
-    else {
-      const whatsappWindow = window.open(waUrl(student), '_blank');
-      if (whatsappWindow) whatsappWindow.opener = null;
-      generatePdf(ids, true, whatsappWindow);
-    }
+    else generatePdf(ids, true);
   }
   if (b.dataset.studentHistory) studentHistory(b.dataset.studentHistory);
   if (b.dataset.action === 'scan') startScanner();

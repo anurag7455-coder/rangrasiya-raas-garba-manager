@@ -243,6 +243,6 @@
       "Review the Students page and dashboard",
       "Choose WhatsApp PDF only when ready to message the student"
     ],
-    "expected": "The pass PDF is generated after saving; the app does not automatically open WhatsApp, no pending amount is displayed, and the separate WhatsApp PDF action opens the student's chat or sends through configured WhatsApp Business delivery."
+    "expected": "The pass PDF is generated after saving; the app does not automatically open WhatsApp, no pending amount is displayed, and selecting WhatsApp PDF starts the PDF download and shows a confirmation dialog. WhatsApp opens only after the user taps Open WhatsApp in that dialog, where the user can attach the downloaded PDF."
   }
 ]
