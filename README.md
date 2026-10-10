@@ -31,6 +31,10 @@ npm run deploy
 
 The shareable app is at https://rangrasiya-pass-control.pages.dev. It works on phones, tablets, and computers, and records are stored in D1 for access across devices. The Pages project and database are already created for this account; skip the project-creation command when redeploying.
 
+### Install on a phone
+
+Open https://rangrasiya-pass-control.pages.dev in Chrome on Android, let the first page load finish while online, then use Chrome's menu and choose **Install app** or **Add to Home screen**. The app needs HTTPS, a valid manifest, and a service worker; the manifest and worker are served from the site root.
+
 For a Git-connected Cloudflare **Workers Builds** project, set the build command to `npm run build` and the deploy command to `npm run deploy`. Do not use `npx wrangler deploy`; that targets Workers and fails for this Pages project. If using the Cloudflare Pages Git integration instead, set the build command to `npm run build`, the build output directory to `dist`, and leave the deploy command to the Pages integration.
 
 If you want direct WhatsApp Business PDF delivery, configure these Pages secrets/variables before deploying:
