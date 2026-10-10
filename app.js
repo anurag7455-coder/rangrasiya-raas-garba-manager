@@ -17,7 +17,8 @@ let currentView = 'dashboard',
   bulkSelectedStudentIds = new Set(),
   remoteReady = false,
   syncQueue = Promise.resolve(),
-  realtimeConnection = null;
+  realtimeConnection = null,
+  pendingPdfShare = null;
 let reportFilters = { event: '', student: '', from: '', to: '' };
 const hasStateData = value => Object.values(value || {}).some(list => Array.isArray(list) && list.length);
 const mergeStates = (local, remote) => {
@@ -1187,7 +1188,7 @@ async function qrImageForAllocation(allocation) {
   if (!image) throw new Error('QR image could not be created');
   return image;
 }
-async function generatePdf(ids, share = false) {
+async function generatePdf(ids, purpose = 'download') {
   if (!window.jspdf || !window.QRCode) {
     toast('QR/PDF library is still loading. Please retry.');
     return;
@@ -1247,22 +1248,89 @@ async function generatePdf(ids, share = false) {
     .replace(/[\\/:*?"<>|]+/g, '-')
     .replace(/\s+/g, ' ') || 'Student';
   const filename = `${studentFileName}.pdf`;
-  doc.save(filename);
-  if (share) {
+  const blob = doc.output('blob');
+  if (purpose === 'share') {
     const student = studentOf(allocations[0].student);
-    const message = `Hi ${student?.name || ''}, your Rangrasiya Raas Garba QR passes are ready. I will attach the PDF here.`;
-    $('#whatsappShareLink').href = waUrl(student, message);
+    const file = typeof File === 'function'
+      ? new File([blob], filename, { type: 'application/pdf' })
+      : null;
+    let supportsFileShare = false;
+    try {
+      supportsFileShare = !!(
+        file &&
+        typeof navigator.share === 'function' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [file] })
+      );
+    } catch (error) {
+      console.warn('PDF file sharing capability check failed:', error);
+    }
+    pendingPdfShare = {
+      blob,
+      file,
+      filename,
+      student,
+      message: `Hi ${student?.name || ''}, your Rangrasiya Raas Garba QR passes are ready.`,
+    };
+    $('#whatsappShareNative').hidden = !supportsFileShare;
+    $('#whatsappShareDownload').hidden = false;
+    $('#whatsappShareLink').hidden = true;
+    $('#whatsappShareLink').removeAttribute('href');
+    $('#whatsappShareInstructions').textContent = supportsFileShare
+      ? 'Share the PDF directly to WhatsApp, or download it first and attach it yourself.'
+      : 'Download the PDF first. After the download starts, you can open WhatsApp and attach it.';
     openModal('whatsappShareModal');
-    toast(`PDF download started: ${filename}. Open WhatsApp after it finishes.`);
-  } else toast('QR PDF downloaded.');
+  } else {
+    downloadPdf(blob, filename);
+    toast(`QR PDF download started: ${filename}.`);
+  }
+}
+function downloadPdf(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+async function sharePendingPdf() {
+  if (!pendingPdfShare?.file || typeof navigator.share !== 'function') return;
+  try {
+    await navigator.share({
+      files: [pendingPdfShare.file],
+      title: pendingPdfShare.filename,
+      text: pendingPdfShare.message,
+    });
+    closeModals();
+    toast('PDF shared.');
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      toast('PDF sharing canceled.');
+      return;
+    }
+    console.error('PDF sharing failed:', error);
+    toast('Could not share the PDF. You can download it and attach it manually.');
+  }
+}
+function downloadPendingSharePdf() {
+  if (!pendingPdfShare) return;
+  const { blob, filename, student, message } = pendingPdfShare;
+  downloadPdf(blob, filename);
+  const whatsappLink = $('#whatsappShareLink');
+  whatsappLink.href = waUrl(student, message);
+  whatsappLink.hidden = false;
+  $('#whatsappShareInstructions').textContent =
+    `Download started: ${filename}. After it finishes, tap Open WhatsApp and attach the downloaded PDF.`;
+  toast(`PDF download started: ${filename}. WhatsApp is available after the download starts.`);
 }
 function issue(a) {
   a.issued = true;
   a.issuedDate = today;
   save();
   render();
-  generatePdf([a.id], false);
-  toast('Pass issued. QR PDF generated.');
+  toast('Pass issued. Use QR PDF or WhatsApp PDF when you are ready to share it.');
 }
 function paymentModal(id) {
   let a = state.allocations.find(a => a.id === id),
@@ -1491,7 +1559,7 @@ document.addEventListener('click', e => {
     openModal('allocationModal');
   }
   if (b.dataset.payment) paymentModal(b.dataset.payment);
-  if (b.dataset.pdf) generatePdf([b.dataset.pdf], true);
+  if (b.dataset.pdf) generatePdf([b.dataset.pdf], 'download');
   if (b.dataset.whatsapp) {
     const student = studentOf(b.dataset.whatsapp);
     const mobile = whatsappNumber(student);
@@ -1503,8 +1571,10 @@ document.addEventListener('click', e => {
       .filter(a => a.student === b.dataset.whatsapp && a.issued)
       .map(a => a.id);
     if (!ids.length) toast('Issue at least one pass before sharing a QR PDF.');
-    else generatePdf(ids, true);
+    else generatePdf(ids, 'share');
   }
+  if (b.id === 'whatsappShareNative') sharePendingPdf();
+  if (b.id === 'whatsappShareDownload') downloadPendingSharePdf();
   if (b.dataset.studentHistory) studentHistory(b.dataset.studentHistory);
   if (b.dataset.action === 'scan') startScanner();
   if (b.dataset.action === 'bulk-allocate') { prepareBulkAllocation(); openModal('bulkAllocationModal'); }
@@ -1775,14 +1845,12 @@ $('#studentForm').addEventListener('submit', e => {
   save();
   closeModals();
   render();
-  if (changedAllocations.length) {
-    const allIssuedIds = state.allocations.filter(a => a.student === studentId && a.issued).map(a => a.id);
-    generatePdf(allIssuedIds, false);
-  }
   const quantityIncreases = plans.filter(plan => plan.existing && plan.quantity > Number(plan.existing.quantity || 0)).length;
   toast(old
     ? `Student updated; ${created.length} new day allocation(s) and ${quantityIncreases} quantity increase(s) saved.`
-    : `Student saved, ${money(complimentary ? 0 : paid)} recorded and QR PDF issued.`);
+    : created.length
+      ? `Student saved and ${money(complimentary ? 0 : paid)} payment recorded. Use QR PDF or WhatsApp PDF when ready to share.`
+      : 'Student profile saved.');
 });
 $('#expenseForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -1905,9 +1973,8 @@ $('#allocationForm').addEventListener('submit', e => {
   save();
   closeModals();
   render();
-  generatePdf(created, false);
   toast(
-    `${created.length} pass allocation(s) issued; ${money(paidAmount)} advance recorded.`
+    `${created.length} pass allocation(s) issued; ${money(paidAmount)} advance recorded. Use QR PDF or WhatsApp PDF when ready to share.`
   );
 });
 document.addEventListener('input', e => {

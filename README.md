@@ -35,6 +35,8 @@ The shareable app is at https://rangrasiya-pass-control.pages.dev. It works on p
 
 Open https://rangrasiya-pass-control.pages.dev in Chrome on Android, let the first page load finish while online, then use Chrome's menu and choose **Install app** or **Add to Home screen**. The app needs HTTPS, a valid manifest, and a service worker; the manifest and worker are served from the site root.
 
+Pass issuance does not download a PDF. Use **QR PDF** to download one, or choose **WhatsApp PDF** to generate a single PDF and share it through Android's share sheet. If file sharing is unavailable, download the PDF from the prompt before opening WhatsApp to attach it.
+
 For a Git-connected Cloudflare **Workers Builds** project, set the build command to `npm run build` and the deploy command to `npm run deploy`. Do not use `npx wrangler deploy`; that targets Workers and fails for this Pages project. If using the Cloudflare Pages Git integration instead, set the build command to `npm run build`, the build output directory to `dist`, and leave the deploy command to the Pages integration.
 
 If you want direct WhatsApp Business PDF delivery, configure these Pages secrets/variables before deploying:

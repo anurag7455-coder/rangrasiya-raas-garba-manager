@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rangrasiya-app-v1';
+const CACHE_NAME = 'rangrasiya-app-v2';
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
