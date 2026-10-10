@@ -26,10 +26,12 @@ Apply the checked-in schema migration to the remote database, create the Pages p
 npx wrangler d1 migrations apply passflow-state --remote
 npx wrangler pages project create rangrasiya-pass-control --production-branch main
 npm run build
-npx wrangler pages deploy dist --project-name rangrasiya-pass-control --branch main
+npm run deploy
 ```
 
 The `*.pages.dev` URL printed by Wrangler is the shareable link; it works on phones, tablets, and computers, and records are stored in D1 for access across devices. If the Pages project already exists, skip the project-creation command.
+
+For a Git-connected Cloudflare **Workers Builds** project, set the build command to `npm run build` and the deploy command to `npm run deploy`. Do not use `npx wrangler deploy`; that targets Workers and fails for this Pages project. If using the Cloudflare Pages Git integration instead, set the build command to `npm run build`, the build output directory to `dist`, and leave the deploy command to the Pages integration.
 
 If you want direct WhatsApp Business PDF delivery, configure these Pages secrets/variables before deploying:
 

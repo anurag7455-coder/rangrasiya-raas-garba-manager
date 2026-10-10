@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npx wrangler pages deploy dist --project-name rangrasiya-pass-control --branch main"
   },
   "dependencies": {
     "lucide": "^0.469.0"
