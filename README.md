@@ -14,13 +14,13 @@ Install and authenticate Wrangler with a Cloudflare account that has permission 
 npx wrangler login
 ```
 
-Create the D1 database and add its `PASSFLOW_DB` binding to `wrangler.toml`:
+The deployed project uses the `passflow-state` D1 database, bound as `PASSFLOW_DB` in `wrangler.toml`. When setting this up in a different Cloudflare account, create a database:
 
 ```sh
-npx wrangler d1 create passflow-state --binding PASSFLOW_DB --update-config
+npx wrangler d1 create passflow-state
 ```
 
-Apply the checked-in schema migration to the remote database, create the Pages project, and deploy:
+Copy the generated database ID into the `[[d1_databases]]` entry in `wrangler.toml`, keeping the binding name `PASSFLOW_DB` and migrations directory `migrations`. Then apply the checked-in schema migration, create the Pages project once, and deploy:
 
 ```sh
 npx wrangler d1 migrations apply passflow-state --remote
@@ -29,7 +29,7 @@ npm run build
 npm run deploy
 ```
 
-The `*.pages.dev` URL printed by Wrangler is the shareable link; it works on phones, tablets, and computers, and records are stored in D1 for access across devices. If the Pages project already exists, skip the project-creation command.
+The shareable app is at https://rangrasiya-pass-control.pages.dev. It works on phones, tablets, and computers, and records are stored in D1 for access across devices. The Pages project and database are already created for this account; skip the project-creation command when redeploying.
 
 For a Git-connected Cloudflare **Workers Builds** project, set the build command to `npm run build` and the deploy command to `npm run deploy`. Do not use `npx wrangler deploy`; that targets Workers and fails for this Pages project. If using the Cloudflare Pages Git integration instead, set the build command to `npm run build`, the build output directory to `dist`, and leave the deploy command to the Pages integration.
 
@@ -43,7 +43,7 @@ To move existing browser data into the shared app, open the current app on the d
 
 Screenshot OCR currently requires a separate AI service and is not included in this free setup. Excel imports and manual student entry remain available.
 
-Wrangler uses the `wrangler.toml` Pages configuration and the SQL files in `migrations/`. The Cloudflare account authorization step is required; deployment cannot be completed without access to an authorized Cloudflare account.
+Wrangler uses the `wrangler.toml` Pages configuration and the SQL files in `migrations/`. Cloudflare account authorization is required to create or deploy resources.
 
 ### Local development
 

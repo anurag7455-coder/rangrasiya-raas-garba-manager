@@ -1,3 +1,9 @@
 name = "rangrasiya-pass-control"
 compatibility_date = "2026-10-10"
 pages_build_output_dir = "./dist"
+
+[[d1_databases]]
+binding = "PASSFLOW_DB"
+database_name = "passflow-state"
+database_id = "e078b4e1-8557-4a94-8496-06147dbded7e"
+migrations_dir = "migrations"
